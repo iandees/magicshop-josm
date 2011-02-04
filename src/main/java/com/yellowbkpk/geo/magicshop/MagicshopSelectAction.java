@@ -15,16 +15,35 @@ import java.awt.Toolkit;
 import java.awt.event.AWTEventListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.Collection;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.openstreetmap.josm.Main;
 import org.openstreetmap.josm.actions.mapmode.MapMode;
 import org.openstreetmap.josm.data.Bounds;
 import org.openstreetmap.josm.data.coor.EastNorth;
+import org.openstreetmap.josm.data.coor.LatLon;
+import org.openstreetmap.josm.data.osm.DataSet;
+import org.openstreetmap.josm.data.osm.visitor.BoundingXYVisitor;
 import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.MapView;
 import org.openstreetmap.josm.gui.layer.Layer;
 import org.openstreetmap.josm.gui.layer.MapViewPaintable;
 import org.openstreetmap.josm.gui.layer.OsmDataLayer;
+import org.openstreetmap.josm.gui.progress.PleaseWaitProgressMonitor;
+import org.openstreetmap.josm.gui.progress.ProgressMonitor;
+import org.openstreetmap.josm.io.IllegalDataException;
+import org.openstreetmap.josm.io.OsmReader;
 import org.openstreetmap.josm.tools.ImageProvider;
 import org.openstreetmap.josm.tools.Shortcut;
 
@@ -41,8 +60,10 @@ public class MagicshopSelectAction extends MapMode implements
     private Mode mode = Mode.None;
 
     private Color selectedColor;
-	private EastNorth firstPoint;
-	private EastNorth secondPoint;
+	private LatLon firstPoint;
+	private LatLon secondPoint;
+	private Bounds bounds;
+	private ExecutorService executor = Executors.newCachedThreadPool();
 
     public MagicshopSelectAction(MapFrame mapFrame) {
         super(tr("Magicshop Mode"), "magicshop", tr("Magicshop Mode"),
@@ -91,10 +112,6 @@ public class MagicshopSelectAction extends MapMode implements
     @Override
     public void enterMode() {
         super.enterMode();
-        if (getCurrentDataSet() == null) {
-            Main.map.selectSelectTool(false);
-            return;
-        }
         currCursor = cursorCrosshair;
         Main.map.mapView.addMouseListener(this);
         Main.map.mapView.addMouseMotionListener(this);
@@ -147,30 +164,91 @@ public class MagicshopSelectAction extends MapMode implements
     }
 
 	@Override
-    public void mousePressed(MouseEvent e) {
-        if (e.getButton() != MouseEvent.BUTTON1)
-            return;
-        if (!Main.map.mapView.isActiveLayerDrawable())
-            return;
+    public void mousePressed(MouseEvent e) {}
 
-        if (mode == Mode.None) {
-            firstPoint = latlon2eastNorth(Main.map.mapView.getLatLon(
-                    e.getX(), e.getY()));
-            Main.map.mapView.repaint();
-            mode = Mode.FirstPoint;
-        } else if(mode == Mode.FirstPoint) {
-            secondPoint = latlon2eastNorth(Main.map.mapView.getLatLon(
-                    e.getX(), e.getY()));
-            Main.map.mapView.repaint();
-            mode = Mode.SecondPoint;
+    private void startMagicshopQuery() {
+		executor.submit(new Runnable() {
+			public void run() {
+				try {
+					LatLon boundMax = bounds.getMax();
+					LatLon boundMin = bounds.getMin();
+					URL u = new URL(
+							"http://magicshop.cloudapp.net/DetectRoad.svc/detect/?pt1="
+									+ firstPoint.getY() + ","
+									+ firstPoint.getX() + "&pt2="
+									+ secondPoint.getY() + ","
+									+ secondPoint.getX() + "&bbox="
+									+ boundMax.getY() + ","
+									+ boundMin.getX() + ","
+									+ boundMin.getY() + ","
+									+ boundMax.getX());
+					System.out.println("Connecting to " + u.toString());
+					URLConnection connection = u.openConnection();
+					InputStream inputStream = connection.getInputStream();
+					
+					// To fix the "visible=flase" bug...
+					BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
+					String readLine = br.readLine();
+					readLine = readLine.replace("flase", "true");
+					inputStream = new ByteArrayInputStream(readLine.getBytes());
+					
+					DataSet dataSet = OsmReader.parseDataSet(inputStream, null);
+					System.out.println("Generated " + dataSet.getWays().size() + " ways with " + dataSet.getNodes().size() + " nodes.");
+
+	                OsmDataLayer target;
+	                target = getEditLayer();
+	                if (target == null) {
+	                    target = getFirstDataLayer();
+	                }
+	                target.mergeFrom(dataSet);
+	                BoundingXYVisitor v = new BoundingXYVisitor();
+	                if (bounds != null) {
+	                    v.visit(bounds);
+	                } else {
+	                    v.computeBoundingBox(dataSet.getNodes());
+	                }
+	                System.out.println("Finished grabbing data.");
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (IllegalDataException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+	}
+
+	protected OsmDataLayer getFirstDataLayer() {
+        if (!Main.isDisplayingMapView()) return null;
+        Collection<Layer> layers = Main.map.mapView.getAllLayersAsList();
+        for (Layer layer : layers) {
+            if (layer instanceof OsmDataLayer)
+                return (OsmDataLayer) layer;
         }
+        return null;
     }
 
-    @Override
+	@Override
     public void mouseDragged(MouseEvent e) {}
 
     @Override
-    public void mouseReleased(MouseEvent e) {}
+    public void mouseReleased(MouseEvent e) {
+        if (e.getButton() != MouseEvent.BUTTON1)
+            return;
+
+        if (mode == Mode.None) {
+			firstPoint = Main.map.mapView.getLatLon(e.getX(), e.getY());
+            Main.map.mapView.repaint();
+            mode = Mode.FirstPoint;
+        } else if(mode == Mode.FirstPoint) {
+            secondPoint = Main.map.mapView.getLatLon(e.getX(), e.getY());
+            bounds = Main.map.mapView.getRealBounds();
+            Main.map.mapView.repaint();
+            mode = Mode.SecondPoint;
+            startMagicshopQuery();
+        }
+    }
 
     private void updCursor() {
         if (!Main.isDisplayingMapView())
@@ -199,7 +277,7 @@ public class MagicshopSelectAction extends MapMode implements
 
     @Override
     public boolean layerIsSupported(Layer l) {
-        return l instanceof OsmDataLayer;
+        return true;
     }
 
 }
