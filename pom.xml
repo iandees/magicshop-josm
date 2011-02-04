@@ -1,0 +1,28 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.yellowbkpk.geo</groupId>
+    <artifactId>magicshop</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>Magicshop Plugin</name>
+    <description>Plugin to view Magicshop results inside JOSM.</description>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.2</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Plugin-Mainversion>3000</Plugin-Mainversion>
+                            <Plugin-Version>1</Plugin-Version>
+                            <Plugin-Class>com.yellowbkpk.geo.magicshop.MagicshopPlugin</Plugin-Class>
+                            <Plugin-Description>Foo</Plugin-Description>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
