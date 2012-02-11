@@ -1,6 +1,14 @@
 Installation
 ============
 
+1. Download [the most recent version](https://github.com/iandees/magicshop-josm/downloads) and place the JAR in your JOSM plugins directory. (usually `~/.josm/plugins`)
+
+2. Start JOSM and enable the plugin via the plugin preferences panel.
+
+
+Compilation
+============
+
 1. Run `mvn package` in the root directory of the project.
 
 2. Copy the resulting jar file from the `target/` directory to your JOSM plugins directory (usually `~/.josm/plugins`).
