@@ -43,6 +43,7 @@ import org.openstreetmap.josm.gui.layer.OsmDataLayer;
 import org.openstreetmap.josm.gui.progress.PleaseWaitProgressMonitor;
 import org.openstreetmap.josm.gui.progress.ProgressMonitor;
 import org.openstreetmap.josm.io.IllegalDataException;
+import org.openstreetmap.josm.io.OsmChangeReader;
 import org.openstreetmap.josm.io.OsmReader;
 import org.openstreetmap.josm.tools.ImageProvider;
 import org.openstreetmap.josm.tools.Shortcut;
@@ -192,7 +193,7 @@ public class MagicshopSelectAction extends MapMode implements
 					readLine = readLine.replace("flase", "true");
 					inputStream = new ByteArrayInputStream(readLine.getBytes());
 					
-					DataSet dataSet = OsmReader.parseDataSet(inputStream, null);
+					DataSet dataSet = OsmChangeReader.parseDataSet(inputStream, null);
 					System.out.println("Generated " + dataSet.getWays().size() + " ways with " + dataSet.getNodes().size() + " nodes.");
 
 	                OsmDataLayer target;
